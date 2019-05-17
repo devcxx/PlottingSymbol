@@ -1,0 +1,151 @@
+/* -*-c++-*- */
+/* osgEarth - Dynamic map generation toolkit for OpenSceneGraph
+* Copyright 2016 Pelican Mapping
+* http://osgearth.org
+*
+* osgEarth is free software; you can redistribute it and/or modify
+* it under the terms of the GNU Lesser General Public License as published by
+* the Free Software Foundation; either version 2 of the License, or
+* (at your option) any later version.
+*
+* THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+* IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+* FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+* AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+* LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+* FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS
+* IN THE SOFTWARE.
+*
+* You should have received a copy of the GNU Lesser General Public License
+* along with this program.  If not, see <http://www.gnu.org/licenses/>
+*/
+#ifndef OSGEARTH_DRIVERS_MP_TERRAIN_ENGINE_TILE_NODE
+#define OSGEARTH_DRIVERS_MP_TERRAIN_ENGINE_TILE_NODE 1
+
+#include "Common"
+#include "TileModel"
+#include <osgEarth/TerrainTileNode>
+
+namespace osgEarth { namespace Drivers { namespace MPTerrainEngine
+{
+    /**
+     * Node that represents a single terrain tile that was compiled from
+     * a TileModel (and corresponds to one TileKey). The matrixtransform
+     * localizes the TileNode within the terrain.
+     */
+    class TileNode : public osg::MatrixTransform                     
+    {
+    public: // osgEarth::TerrainTileNode
+        
+        const TileKey& getKey() const { return _key; }
+
+        osg::Texture* getElevationTexture() const;
+
+        osg::RefMatrixf* getElevationTextureMatrix() const;
+
+        osg::Texture* getNormalTexture() const;
+
+        osg::RefMatrixf* getNormalTextureMatrix() const;
+
+
+    public:
+        /**
+         * Constructs a new tile node
+         */
+        TileNode(const TileKey& key, TileModel* model, const osg::Matrixd& matrix);
+
+        /**
+         * True if this is a valid tile node.
+         * Subclass may override (see InvalidTileNode)
+         */
+        virtual bool isValid() const { return true; }
+
+        /**
+         * Access the source data model that built this tile.
+         */
+        const TileModel* getTileModel() { return _model.get(); }
+
+        /**
+         * Sets the last traversal frame manually. A parent TileGroup
+         * will call this to prevent the born-time from resetting 
+         * when traversing the tile's children.
+         */
+        void setLastTraversalFrame(unsigned frame);
+
+        /**
+         * Tells the tile node the current map revision, which is turn
+         * will determine whether the tile is dirty and needs updating.
+         */
+        void setMapRevision( const Revision& value ) { _maprevision = value; }
+
+        /**
+         * Flags this Tile as dirty, regardless of whether the revisions are in sync.
+         */
+        void setDirty() { _dirty = true; }
+
+        /**
+         * Whether the tile is dirty and was traversed (and if therefore ready for
+         * a dynamic update)
+         */
+        bool isOutOfDate() const { return _outOfDate; }
+
+        /**
+         * The tile-aligned bounding box of the terrain geometry.
+         */
+        void setTerrainBoundingBox(const osg::BoundingBox& bbox) { _terrainBBox = bbox; }
+        const osg::BoundingBox& getTerrainBoundingBox() const { return _terrainBBox; }
+
+    public:
+
+        // called by the TileNodeRegistry when a tilenode that this tile was waiting
+        // on has arrived.
+        void notifyOfArrival(TileNode* waitee);
+
+
+    public: // TileNodeContainer
+
+        TileNode* getTileNode() { return this; }    
+
+    public: // OVERRIDES
+
+        virtual void traverse( class osg::NodeVisitor& nv );
+
+        virtual void resizeGLObjectBuffers(unsigned maxSize);
+        virtual void releaseGLObjects(osg::State* state) const;
+
+    protected:
+
+        virtual ~TileNode() { }
+
+        TileKey                            _key;
+        osg::ref_ptr<TileModel>            _model;
+        unsigned                           _lastTraversalFrame;
+        Revision                           _maprevision;
+        bool                               _outOfDate;
+        bool                               _dirty;
+        osg::ref_ptr<osg::RefMatrixf>      _elevTexMat;
+        osg::ref_ptr<osg::RefMatrixf>      _normalTexMat;
+        osg::BoundingBox                   _terrainBBox;
+    };
+
+
+    typedef std::vector< osg::ref_ptr<TileNode> > TileNodeVector;
+
+
+    /**
+     * Marker class - the engine will return one of these when a TileNode
+     * load fails permanently. It will also blacklist the TileKey.
+     */
+    class InvalidTileNode : public TileNode
+    {
+    public:
+        InvalidTileNode(const TileKey& key) : TileNode(key, 0L, osg::Matrix()) { }
+        bool isValid() const { return false; }
+    protected:
+        virtual ~InvalidTileNode() { }
+    };
+
+
+} } } // namespace osgEarth::Drivers::MPTerrainEngine
+
+#endif // OSGEARTH_DRIVERS_MP_TERRAIN_ENGINE_TILE_NODE

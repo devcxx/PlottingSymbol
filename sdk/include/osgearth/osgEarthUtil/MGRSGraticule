@@ -1,0 +1,161 @@
+/* -*-c++-*- */
+/* osgEarth - Dynamic map generation toolkit for OpenSceneGraph
+ * Copyright 2016 Pelican Mapping
+ * http://osgearth.org
+ *
+ * osgEarth is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU Lesser General Public License as published by
+ * the Free Software Foundation; either version 2 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU Lesser General Public License for more details.
+ *
+ * You should have received a copy of the GNU Lesser General Public License
+ * along with this program.  If not, see <http://www.gnu.org/licenses/>
+ */
+#ifndef OSGEARTHUTIL_MGRS_GRATICLE
+#define OSGEARTHUTIL_MGRS_GRATICLE
+
+#include <osgEarthUtil/Common>
+#include <osgEarth/VisibleLayer>
+#include <osgEarthSymbology/Style>
+#include <osgEarthFeatures/Feature>
+#include <osg/ClipPlane>
+
+
+namespace osgEarth { namespace Util
+{
+    using namespace osgEarth;
+    using namespace osgEarth::Features;
+    using namespace osgEarth::Symbology;
+
+    /**
+     * Configuration options for the geodetic graticule.
+     */
+    class OSGEARTHUTIL_EXPORT MGRSGraticuleOptions : public VisibleLayerOptions
+    {
+    public:
+        MGRSGraticuleOptions(const ConfigOptions& conf =ConfigOptions());
+
+        //! Location of the SQID feature data
+        optional<URI>& sqidData() { return _sqidURI; }
+        const optional<URI>& sqidData() const { return _sqidURI; }
+
+        /** Style for grid zone designator geometry and text */
+        optional<Style>& gzdStyle() { return _gzdStyle; }
+        const optional<Style>& gzdStyle() const { return _gzdStyle; }
+
+        /** Symbology for SQID geometry and text */
+        optional<Style>& sqidStyle() { return _sqidStyle; }
+        const optional<Style>& sqidStyle() const { return _sqidStyle; }
+
+        typedef std::map<double, Style> StyleMap;
+        optional<StyleMap>& styleMap() { return _styleMap; }
+        const optional<StyleMap>& styleMap() const { return _styleMap; }
+
+        optional<double>& maxResolution() { return _maxResolution; }
+        const optional<double>& maxResolution() const { return _maxResolution; }
+
+    public:
+        virtual Config getConfig() const {
+            Config conf = VisibleLayerOptions::getConfig();
+            conf.key() = "mgrs_graticule";
+            conf.set("sqid_data", _sqidURI);
+            conf.setObj("gzd_style", _gzdStyle);
+            conf.setObj("sqid_style", _sqidStyle);
+            conf.set("max_resolution", _maxResolution);
+            return conf;
+        }
+
+        virtual void fromConfig(const Config& conf) {
+            conf.getIfSet("sqid_data", _sqidURI);
+            conf.getObjIfSet("gzd_style", _gzdStyle);
+            conf.getObjIfSet("sqid_style", _sqidStyle);
+            conf.getIfSet("max_resolution", _maxResolution);
+        }
+
+    protected:
+        void mergeConfig(const Config& conf) {
+            VisibleLayerOptions::mergeConfig(conf);
+            fromConfig(conf);
+        }
+
+        optional<URI> _sqidURI;
+        optional<Style> _gzdStyle;
+        optional<Style> _sqidStyle;
+        optional<double> _maxResolution;
+        optional<StyleMap> _styleMap;
+    };
+
+
+    /**
+     * Implements a MGRS (Military Grid Reference System) map graticule. 
+     * 
+     * NOTE: So far, this only works for geocentric maps.
+     * TODO: Add projected support; add text label support
+     */
+    class OSGEARTHUTIL_EXPORT MGRSGraticule : public VisibleLayer
+    {
+    public:
+        META_Layer(osgEarthUtil, MGRSGraticule, MGRSGraticuleOptions);
+
+
+        MGRSGraticule();
+
+        /**
+         * Constructs a new graticule for use with the specified map.
+         *
+         * @param options
+         *      Optional "options" that configure the graticule. Defaults will be used
+         *      if you don't specify this.
+         */
+        MGRSGraticule(const MGRSGraticuleOptions& options);
+
+        /**
+         * If you change any of the options, call this to refresh the display
+         * to refelct the new settings.
+         */
+        void dirty();
+
+    public: // Layer
+
+        virtual void addedToMap(const Map* map);
+
+        virtual void removedFromMap(const Map* map);
+        
+        virtual osg::Node* getOrCreateNode();
+
+        virtual void init();
+
+    protected:
+
+        /** dtor */
+        virtual ~MGRSGraticule() { }
+
+
+    private:
+        
+        void setUpDefaultStyles();
+
+        void rebuild();
+
+        osg::ref_ptr<const Profile> _profile;
+
+        osg::ref_ptr<FeatureProfile> _featureProfile;
+
+        osg::ref_ptr<osg::ClipPlane> _clipPlane;
+
+        osg::ref_ptr<osg::Group> _root;
+
+        osg::observer_ptr<const Map> _map;
+
+        void loadGZDFeatures(const SpatialReference* srs, FeatureList& output) const;
+
+    };
+
+} } // namespace osgEarth::Util
+
+#endif // OSGEARTHUTIL_UTM_GRATICLE

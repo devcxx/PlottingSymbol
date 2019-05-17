@@ -1,0 +1,267 @@
+/* -*-c++-*- */
+/* osgEarth - Dynamic map generation toolkit for OpenSceneGraph
+ * Copyright 2016 Pelican Mapping
+ * http://osgearth.org
+ *
+ * osgEarth is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU Lesser General Public License as published by
+ * the Free Software Foundation; either version 2 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU Lesser General Public License for more details.
+ *
+ * You should have received a copy of the GNU Lesser General Public License
+ * along with this program.  If not, see <http://www.gnu.org/licenses/>
+ */
+
+#ifndef OSGEARTH_MODEL_LAYER_H
+#define OSGEARTH_MODEL_LAYER_H 1
+
+#include <osgEarth/Common>
+#include <osgEarth/AlphaEffect>
+#include <osgEarth/VisibleLayer>
+#include <osgEarth/Cache>
+#include <osgEarth/Config>
+#include <osgEarth/ModelSource>
+#include <osgEarth/MaskSource>
+#include <osgEarth/ShaderUtils>
+#include <osgEarth/Containers>
+#include <osgEarth/SceneGraphCallback>
+#include <osg/Node>
+#include <osg/Array>
+#include <vector>
+
+namespace osgEarth
+{
+    class Map;
+
+    /**
+     * Configuration options for a ModelLayer.
+     */
+    class OSGEARTH_EXPORT ModelLayerOptions : public VisibleLayerOptions
+    {
+    public:        
+        /** Construct or deserialize new model layer options. */
+        ModelLayerOptions(
+            const ConfigOptions& options =ConfigOptions());
+
+        /** Construct or deserialize new model layer options. */
+        ModelLayerOptions(
+            const std::string&        name, 
+            const ModelSourceOptions& driverOptions =ModelSourceOptions() );
+
+        /** Copy ctor*/
+        ModelLayerOptions(const ModelLayerOptions& rhs);
+
+        /** dtor */
+        virtual ~ModelLayerOptions() { }
+
+        /** Assignment operator */
+        ModelLayerOptions& operator = (const ModelLayerOptions&);
+
+        /**
+         * Options for the underlying model source driver.
+         */
+        optional<ModelSourceOptions>& driver() { return _driver; }
+        const optional<ModelSourceOptions>& driver() const { return _driver; }
+
+        /**
+         * Whether to enable OpenGL lighting on the model node.
+         */
+        optional<bool>& lightingEnabled() { return _lighting; }
+        const optional<bool>& lightingEnabled() const { return _lighting; }
+
+        /**
+         * Masking options for cutting a hole in the terrain to accommodate this model.
+         * Note; the mask will NOT honor any visibility or opacity settings on the
+         * model layer.
+         */
+        optional<MaskSourceOptions>& mask() { return _maskOptions; }
+        const optional<MaskSourceOptions>& mask() const { return _maskOptions; }
+
+        /**
+         * Minimum terrain LOD at which to apply the mask (if there if one)
+         */
+        optional<unsigned>& maskMinLevel() { return _maskMinLevel; }
+        const optional<unsigned>& maskMinLevel() const { return _maskMinLevel; }
+
+        /**
+         * Whether this layer should be treated as part of the terrain
+         * for the purposes of elevation queries, clamping, etc.
+         */
+        optional<bool>& terrainPatch() { return _terrainPatch; }
+        const optional<bool>& terrainPatch() const { return _terrainPatch; }
+
+
+    public:
+        virtual Config getConfig() const;
+        virtual void mergeConfig( const Config& conf );
+
+    private:
+        void fromConfig( const Config& conf );
+        void setDefaults();
+
+        optional<ModelSourceOptions> _driver;
+        optional<bool>               _lighting;
+        optional<MaskSourceOptions>  _maskOptions;
+        optional<unsigned>           _maskMinLevel;
+        optional<bool>               _terrainPatch;
+        optional<CachePolicy>        _cachePolicy;
+        optional<std::string>        _cacheId;
+    };
+
+    struct ModelLayerCallback : public VisibleLayerCallback
+    {
+        // Nothing - placeholder
+        typedef void (ModelLayerCallback::*MethodPtr)(class ModelLayer* layer);
+    };
+
+
+    class OSGEARTH_EXPORT ModelLayer : public VisibleLayer
+    {
+    public:
+        META_Layer(osgEarth, ModelLayer, ModelLayerOptions);
+
+        /**
+         * Blank ModelLayer. Use options() to setup before calling open.
+         */
+        ModelLayer();
+
+        /**
+         * Constructs a new model layer.
+         */
+        ModelLayer(const ModelLayerOptions& options);
+
+        /**
+         * Constructs a new model layer with a user-provided driver options.
+         */
+        ModelLayer(const std::string& name, const ModelSourceOptions& options);
+        
+        /**
+         * Constructs a new model layer with a user-provided model source.
+         *
+         * Note: the ModelLayerOptions contains a driver() member for configuring a 
+         * TileSource. But in this constructor, you are passing in an existing TileSource,
+         * and thus the driver() member in ModelLayerOptions will not be used.
+         */
+        ModelLayer(const ModelLayerOptions& options, ModelSource* source );
+
+        /**
+         * Constructs a new model layer with a user provided name and an existing node
+         */
+        ModelLayer(const std::string& name, osg::Node* node);
+
+
+    public:
+
+        /**
+         * Access the underlying model source.
+         */
+        ModelSource* getModelSource() const { return _modelSource.get(); }
+
+        /**
+         * The underlying mask source, if one exists.
+         */
+        MaskSource* getMaskSource() const { return _maskSource.get(); }
+
+        /**
+         * The minimum terrain LOD at which to apply the mask.
+         */
+        unsigned getMaskMinLevel() const { return options().maskMinLevel().get(); }
+        
+        /**
+         * The boundary geometry for the mask.
+         */
+        osg::Vec3dArray* getOrCreateMaskBoundary(
+            float                   heightScale,
+            const SpatialReference* srs,
+            ProgressCallback*       progress);
+
+        /**
+         * Whether this model layer is a terrain patch for the purposes of 
+         * intersection testing. (convenience function)
+         */
+        bool isTerrainPatch() const { return options().terrainPatch().get(); }
+
+        /** Access scene graph callbacks */
+        SceneGraphCallbacks* getSceneGraphCallbacks() { return _sgCallbacks.get(); }
+
+    public:
+
+        /**
+         * Creates the scene graph representing this model layer for the given Map,
+         * or returns one that already exists.
+         */
+        osg::Node* getOrCreateSceneGraph(const Map* map, ProgressCallback* progress);
+
+        /**
+         * Gets a scene graph what was previously created with getOrCreateSceneGraph.
+         */
+        osg::Node* getSceneGraph(const UID& mapUID) const;
+
+    public: // deprecated
+        
+        /** @deprecated */
+        osg::Node* getOrCreateSceneGraph( 
+            const Map*            map, 
+            const osgDB::Options* readOptions,
+            ProgressCallback*     progress ) { return getOrCreateSceneGraph(map, progress); }
+
+    public: // properties
+
+        /** whether to apply lighting to the model layer's root node */
+        void setLightingEnabled( bool value );
+        bool isLightingEnabled() const;
+
+    public: // Layer
+
+        /** Open the layer and return its status */
+        virtual const Status& open();
+
+        /** Serialize this layer */
+        virtual Config getConfig() const;
+
+        /** Node creates by this model layer */
+        virtual osg::Node* getOrCreateNode();
+
+        /**
+         * Sets the read options for this layer to user; this includes
+         * Cache and CachePolicy information potentially.
+         */
+        virtual void setReadOptions(const osgDB::Options* readOptions);
+
+    protected:
+
+        /** post-ctor initialization */
+        virtual void init();
+
+
+    protected:
+
+        virtual ~ModelLayer();
+
+        osg::ref_ptr<ModelSource>     _modelSource;
+        osg::ref_ptr<MaskSource>      _maskSource;
+        Revision                      _modelSourceRev;
+        osg::ref_ptr<AlphaEffect>     _alphaEffect;
+        osg::ref_ptr<osg::Vec3dArray> _maskBoundary;
+        osg::ref_ptr<CacheSettings>   _cacheSettings;
+        osg::ref_ptr<SceneGraphCallbacks> _sgCallbacks;
+
+        typedef fast_map<UID, osg::observer_ptr<osg::Node> > Graphs;
+        Graphs _graphs;
+
+        mutable Threading::Mutex _mutex; // general-purpose mutex.
+
+        void fireCallback(ModelLayerCallback::MethodPtr method);
+
+        void setLightingEnabledNoLock(bool value);
+    };
+
+    typedef std::vector< osg::ref_ptr<ModelLayer> > ModelLayerVector;
+}
+
+#endif // OSGEARTH_MODEL_LAYER_H

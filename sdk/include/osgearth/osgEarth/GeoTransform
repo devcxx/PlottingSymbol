@@ -1,0 +1,134 @@
+/* -*-c++-*- */
+/* osgEarth - Dynamic map generation toolkit for OpenSceneGraph
+ * Copyright 2016 Pelican Mapping
+ * http://osgearth.org
+ *
+ * osgEarth is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU Lesser General Public License as published by
+ * the Free Software Foundation; either version 2 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU Lesser General Public License for more details.
+ *
+ * You should have received a copy of the GNU Lesser General Public License
+ * along with this program.  If not, see <http://www.gnu.org/licenses/>
+ */
+#ifndef OSGEARTH_GEO_TRANSFORM
+#define OSGEARTH_GEO_TRANSFORM
+
+#include <osgEarth/Common>
+#include <osgEarth/Config>
+#include <osgEarth/GeoData>
+#include <osgEarth/Terrain>
+#include <osg/MatrixTransform>
+
+namespace osgEarth
+{
+    class TileKey;
+
+    /**
+     * Transform node that accepts geospatial coordinates.
+     */
+    class OSGEARTH_EXPORT GeoTransform : public osg::MatrixTransform
+    {
+    public:
+        META_Node(osgEarth, GeoTransform);
+
+        /** Constructor */
+        GeoTransform();
+
+        /** Copy constructor */
+        GeoTransform(const GeoTransform& rhs, const osg::CopyOp& op);
+
+        /**
+         * Sets the geospatial position. Returns false upon error.
+         * This method will only handle a GeoPoint with ALTMODE_ABSOLUTE.
+         */
+        bool setPosition(const GeoPoint& p);
+
+        /**
+         * Gets the last known geospatial position.
+         */
+        const GeoPoint& getPosition() const;
+
+        /**
+         * Sets a reference terrain for this transform. Setting this
+         * is required if you want to transform positions into the
+         * terrain's SRS or if you want support for ALTMODE_RELATIVE
+         * positions.
+         */
+        void setTerrain(Terrain* terrain);
+        osg::ref_ptr<Terrain> getTerrain() const { osg::ref_ptr<Terrain> t; _terrain.lock(t); return t; }
+
+        /**
+         * Enabling this will cause the object to automatically 
+         * recompute the matrix for an ALTMODE_RELATIVE position if
+         * the terrain under that position changes. This is disabled
+         * by default. This functionality requires that you set
+         * a reference terrain (see setTerrain).
+         */
+        void setAutoRecomputeHeights(bool value);
+        bool getAutoRecomputeHeights() const { return _autoRecomputeHeights; }
+
+    public:
+        /** Callback that lets the user intercept the compute*Matrix functions during a traversal. */
+        class OSGEARTH_EXPORT ComputeMatrixCallback : public osg::Referenced
+        {
+        public:
+            virtual bool computeLocalToWorldMatrix(const GeoTransform* xform, osg::Matrix& m, osg::NodeVisitor* nv) const;
+            virtual bool computeWorldToLocalMatrix(const GeoTransform* xform, osg::Matrix& m, osg::NodeVisitor* nv) const;
+        };
+
+        /** Installs a compute matrix callback */
+        void setComputeMatrixCallback(ComputeMatrixCallback* cb);
+
+
+    public: // osg::Transform
+
+        virtual bool computeLocalToWorldMatrix(osg::Matrix& m, osg::NodeVisitor* nv) const {
+            return _computeMatrixCallback.valid()
+                ? _computeMatrixCallback->computeLocalToWorldMatrix(this, m, nv)
+                : osg::MatrixTransform::computeLocalToWorldMatrix(m, nv);
+        }
+
+        virtual bool computeWorldToLocalMatrix(osg::Matrix& m, osg::NodeVisitor* nv) const {
+            return _computeMatrixCallback.valid()
+                ? _computeMatrixCallback->computeWorldToLocalMatrix(this, m, nv)
+                : osg::MatrixTransform::computeWorldToLocalMatrix(m, nv);
+        }
+
+
+    public: // osg::Node
+
+        virtual void traverse(osg::NodeVisitor& nv);
+
+
+    public: // TerrainCallback interface
+
+        // called when new data pages in and autoRecompute is true
+        void onTileAdded(const TileKey&          key,
+                         osg::Node*              node,
+                         TerrainCallbackContext& context);
+
+
+    protected:
+        virtual ~GeoTransform() { }
+
+        GeoPoint                   _position;                 // Current position
+        osg::observer_ptr<Terrain> _terrain;                  // Terrain for relative height resolution
+        bool                       _terrainCallbackInstalled; // Whether the Terrain callback is in
+        bool                       _findTerrain;              // True is we need _terrain but don't have it
+        bool                       _autoRecomputeHeights;     // Whether to resolve relative position Z's
+        bool                       _dirtyClamp;               // Whether a terrain clamp is required
+
+        osg::ref_ptr<ComputeMatrixCallback> _computeMatrixCallback;
+
+        void configureAutoRecompute(Terrain* terrain);
+    };
+
+} // namespace osgEarth
+
+#endif // OSGEARTH_GEO_TRANSFORM

@@ -1,0 +1,91 @@
+/* -*-c++-*- */
+/* osgEarth - Dynamic map generation toolkit for OpenSceneGraph
+ * Copyright 2016 Pelican Mapping
+ * http://osgearth.org
+ *
+ * osgEarth is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU Lesser General Public License as published by
+ * the Free Software Foundation; either version 2 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU Lesser General Public License for more details.
+ *
+ * You should have received a copy of the GNU Lesser General Public License
+ * along with this program.  If not, see <http://www.gnu.org/licenses/>
+ */
+
+#include "Common"
+#include "SilverLiningOptions"
+#include "SilverLiningCallback"
+#include "SilverLiningAPIWrapper"
+#include <osgEarthUtil/Sky>
+#include <osgEarth/Map>
+#include <osgEarth/Containers>
+#include <osgEarth/PhongLightingEffect>
+#include <osg/Light>
+#include <osg/LightSource>
+
+namespace osgEarth { namespace SilverLining
+{
+    class SilverLiningContext;
+	class SilverLiningContextNode;
+
+    /**
+     * Node that roots the silverlining adapter.
+     */
+    class OSGEARTHSILVERLINING_EXPORT SilverLiningNode : public osgEarth::Util::SkyNode
+    {
+    public:
+        SilverLiningNode(
+            const osgEarth::SpatialReference* mapSRS,
+            const SilverLiningOptions& options,
+            Callback*                  callback =0L);
+
+    public: // SkyNode
+
+        /** The (sun) light that this node controls */
+        osg::Light* getSunLight() const { return _light.get(); }
+
+        /** Attach to a view so that this node controls its light. */
+        void attach(osg::View* view, int lightNum);
+
+        /** Number of contexts (each context is tied to a camera/viewport) */
+        unsigned getNumContexts() const;
+
+        /** Access the clouds stateset for context "index" so you can modify its render bin details, etc. */
+        osg::StateSet* getCloudsStateSet(unsigned contextIndex) const;
+
+        /** Access the sky stateset for context "index" */
+        osg::StateSet* getSkyStateSet(unsigned contextIndex) const;
+
+    public:
+        // callbacks from base class.
+        void onSetDateTime();
+        void onSetMinimumAmbient();
+
+    public: // osg::Node
+
+        void traverse(osg::NodeVisitor&);
+
+    protected:
+        virtual ~SilverLiningNode();
+
+        osg::ref_ptr<osg::LightSource> _lightSource;
+        osg::ref_ptr<osg::Light> _light;
+        const SilverLiningOptions _options;
+        osg::ref_ptr<osgEarth::PhongLightingEffect> _lighting;
+        const osgEarth::SpatialReference* _mapSRS;
+        osg::ref_ptr<Callback> _callback;
+
+        typedef std::map<osg::Camera*, osg::ref_ptr<osg::Node> > CameraContextMap;
+        CameraContextMap _contexts;
+        osg::NodeList _contextList;
+
+        typedef std::set<osg::ref_ptr<osg::Camera> > CameraSet;
+        CameraSet _camerasToAdd;
+    };
+
+} } // namespace osgEarth::SilverLining

@@ -1,0 +1,113 @@
+/* -*-c++-*- */
+/* osgEarth - Dynamic map generation toolkit for OpenSceneGraph
+ * Copyright 2016 Pelican Mapping
+ * http://osgearth.org
+ *
+ * osgEarth is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU Lesser General Public License as published by
+ * the Free Software Foundation; either version 2 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU Lesser General Public License for more details.
+ *
+ * You should have received a copy of the GNU Lesser General Public License
+ * along with this program.  If not, see <http://www.gnu.org/licenses/>
+ */
+#ifndef OSGEARTH_TRITON_CONTEXT_H
+#define OSGEARTH_TRITON_CONTEXT_H
+
+#include <Triton.h>
+#include "Common"
+#include "TritonOptions"
+#include "TritonAPIWrapper"
+#include "TritonCallback"
+#include <osg/Referenced>
+#include <osg/Light>
+#include <osgEarth/ThreadingUtils>
+
+namespace osgEarth {
+    class SpatialReference;
+}
+
+namespace osgEarth { namespace Triton
+{
+    /**
+     * Contains all the Triton SDK handles.
+     */
+    class TritonContext : public osg::Object
+    {
+    public:
+        META_Object(osgEarth, TritonContext);
+
+        TritonContext(const TritonOptions& options);
+
+        /** Sets the spatial reference system of the map */
+        void setSRS(const osgEarth::SpatialReference* srs);
+
+        /** Sets the user callback */
+        void setCallback(Callback* callback);
+        Callback* getCallback() const { return _callback.get(); }
+
+    public: // accessors
+
+        bool ready() const { return _initAttempted && !_initFailed; }
+
+        /** Spatial reference of the map */
+        const osgEarth::SpatialReference* getSRS() const { return _srs.get(); }
+
+        void initialize(osg::RenderInfo& renderInfo);
+
+        void update(double simTime);
+
+        ::Triton::Environment* getEnvironment() { return _environment; }
+        Environment& getEnvironmentWrapper() const { return *_environmentWrapper; }
+
+        ::Triton::Ocean* getOcean() { return _ocean; }
+        Ocean& getOceanWrapper() const { return *_oceanWrapper; }
+
+        bool passHeightMapToTriton() const;
+
+        int getHeightMapSize() const;
+
+        const std::string& getMaskLayerName() const;
+
+    public: // osg::Object
+
+        /** If State is non-zero, this function releases any associated OpenGL objects for
+           * the specified graphics context. Otherwise, releases OpenGL objects
+           * for all graphics contexts. */
+        void releaseGLObjects(osg::State* state) const;
+
+    protected:
+
+        virtual ~TritonContext();
+
+        // hidden ctors (for META_Object)
+        TritonContext() { }
+        TritonContext(const TritonContext&, const osg::CopyOp&) { }
+
+    private:
+        TritonOptions    _options;
+
+        bool             _initAttempted;
+        bool             _initFailed;
+        Threading::Mutex _initMutex;
+
+        osg::ref_ptr<const osgEarth::SpatialReference> _srs;
+
+        mutable ::Triton::ResourceLoader* _resourceLoader;
+        mutable ::Triton::Environment*    _environment;
+        mutable ::Triton::Ocean*          _ocean;
+
+        Environment* _environmentWrapper;
+        Ocean*       _oceanWrapper;
+
+        osg::ref_ptr<Callback> _callback;
+    };
+
+} } // namespace osgEarth::Triton
+
+#endif // OSGEARTH_TRITON_CONTEXT_H

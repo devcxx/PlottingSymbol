@@ -1,0 +1,116 @@
+/* -*-c++-*- */
+/* osgEarth - Dynamic map generation toolkit for OpenSceneGraph
+* Copyright 2016 Pelican Mapping
+* http://osgearth.org
+*
+* osgEarth is free software; you can redistribute it and/or modify
+* it under the terms of the GNU Lesser General Public License as published by
+* the Free Software Foundation; either version 2 of the License, or
+* (at your option) any later version.
+*
+* THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+* IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+* FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+* AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+* LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+* FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS
+* IN THE SOFTWARE.
+*
+* You should have received a copy of the GNU Lesser General Public License
+* along with this program.  If not, see <http://www.gnu.org/licenses/>
+*/
+#ifndef OSGEARTH_SHADER_FACTORY_H
+#define OSGEARTH_SHADER_FACTORY_H 1
+
+#include <osgEarth/Common>
+#include <osgEarth/VirtualProgram>
+#include <osgEarth/ColorFilter>
+#include <vector>
+
+namespace osgEarth
+{
+    /**
+     * A factory object that generates shader program "scaffolding" for VirtualProgram
+     * attributes. Ths factory generates main() functions for each stage in the shader
+     * pipline. You don't use it directly; instead you just create VirtualProgram
+     * attributes, and those VPs will automatically invoke this factory object to
+     * generate their main() functions.
+     *
+     * The default ShaderFactory is stored in the osgEarth registry. You can replace it,
+     * but this is advanced usage and rarely necessary. If you think you need to alter
+     * the built-in mains, consider whether you can accomplish your goal by using a
+     * VirtualProgram instead!
+     */
+    class OSGEARTH_EXPORT ShaderFactory : public osg::Referenced
+    {
+    public:
+        /**
+         * Defines the ordering of the COLORING and LIGHTING stages in
+         * the fragment program.
+         */
+        enum FragmentStageOrder
+        {
+            /** Apply lighting before coloring/texturing. This mimics the FFP. */
+            FRAGMENT_STAGE_ORDER_LIGHTING_COLORING,
+
+            /** Apply coloring/texturing before lighting. */
+            FRAGMENT_STAGE_ORDER_COLORING_LIGHTING
+        };
+
+    public:
+        /**
+         * Construtor
+         */
+        ShaderFactory();
+
+        /**
+         * Creates a Shader for each of the stages represented in the function map.
+         */
+        virtual ShaderComp::StageMask createMains(
+            const ShaderComp::FunctionLocationMap&    functions,
+            const VirtualProgram::ShaderMap&          in_shaders,
+            const VirtualProgram::ExtensionsSet&      in_extensions,
+            std::vector< osg::ref_ptr<osg::Shader> >& out_mains) const;
+
+        /**
+         * Builds a shader function that executes an image filter chain.
+         * @param functionName Name to give to the resulting shader function
+         * @param chain        Color filter chain to execute
+         */
+        virtual osg::Shader* createColorFilterChainFragmentShader(
+            const std::string&      functionName,
+            const ColorFilterChain& chain ) const;
+
+        /**
+         * The name of the range uniform created by createRangeUniform().
+         */
+        virtual std::string getRangeUniformName() const;
+
+        /**
+         * Creates a uniform that's used by the RangeUniformCullCallback to convey
+         * "distance to viewpoint" in a shader program.
+         */
+        osg::Uniform* createRangeUniform() const;
+
+        /**
+         * Sets the order in which the shader program generator will create
+         * code for the fragment program's COLORING and LIGHTING stages.
+         */
+        void setFragmentStageOrder(const FragmentStageOrder& value);
+        const FragmentStageOrder& getFragmentStageOrder() const { return _fragStageOrder; }
+
+
+    protected:
+        /** dtor */
+        virtual ~ShaderFactory() { }
+
+        FragmentStageOrder _fragStageOrder;
+    };
+
+
+
+
+
+} // namespace osgEarth
+
+#endif // OSGEARTH_SHADER_FACTORY_H

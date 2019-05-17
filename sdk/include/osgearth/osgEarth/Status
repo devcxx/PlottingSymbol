@@ -1,0 +1,75 @@
+/* -*-c++-*- */
+/* osgEarth - Dynamic map generation toolkit for OpenSceneGraph
+* Copyright 2016 Pelican Mapping
+* http://osgearth.org
+*
+* osgEarth is free software; you can redistribute it and/or modify
+* it under the terms of the GNU Lesser General Public License as published by
+* the Free Software Foundation; either version 2 of the License, or
+* (at your option) any later version.
+*
+* THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+* IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+* FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+* AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+* LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+* FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS
+* IN THE SOFTWARE.
+*
+* You should have received a copy of the GNU Lesser General Public License
+* along with this program.  If not, see <http://www.gnu.org/licenses/>
+*/
+
+#ifndef OSGEARTH_STATUS_H
+#define OSGEARTH_STATUS_H 1
+
+#include <osgEarth/Common>
+
+namespace osgEarth
+{
+    /** General purpose status object */
+    class OSGEARTH_EXPORT Status
+    {
+    public:
+        enum Code {
+            NoError,
+            ResourceUnavailable,  // e.g. failure to access a file, URL, database, or other resource
+            ServiceUnavailable,   // e.g. failure to load a plugin, extension, or other module
+            ConfigurationError,   // required data or properties missing
+            AssertionFailure,     // an illegal software state was detected
+            GeneralError          // something else went wrong
+        };
+
+    public:
+        Status() : _code(NoError) { }
+        Status(const Status& rhs) : _code(rhs._code), _source(rhs._source), _msg(rhs._msg) { }
+        Status(const Code& code) : _code(code) { }
+        Status(const std::string& msg) : _code(GeneralError), _msg(msg) { }
+        Status(const Code& code, const std::string& msg) : _code(code), _msg(msg) { }
+        Status(const std::string& source, const std::string& msg) : _code(GeneralError), _source(source), _msg(msg) { }
+        Status(const Code& code, const std::string& source, const std::string& msg) : _code(code), _source(source), _msg(msg) { }
+        bool isOK() const { return _code == NoError; }
+        bool isError() const { return !isOK(); }
+        const Code& code() const { return _code; }
+        const std::string& source() const { return _source; }
+        const std::string& message() const { return _msg; }
+        bool operator == (const Status& rhs) const { return _code == rhs._code && _source.compare(rhs._source) == 0 && _msg.compare(rhs._msg) == 0; }
+        bool operator != (const Status& rhs) const { return !(*this==rhs); }
+        bool const operator ! () const { return isError(); }
+        static Status OK() { return Status(); }
+        static Status Error(const Code& code) { return Status(code); }
+        static Status Error(const std::string& msg) { return Status(msg); }
+        static Status Error(const Code& code, const std::string& msg) { return Status(code, msg); }
+        static Status Error(const std::string& owner, const std::string& msg) { return Status(owner, msg); }
+        static Status Error(const Code& code, const std::string& owner, const std::string& msg) { return Status(code, owner, msg); }
+        std::string toString() const;
+    private:
+        Code _code;
+        std::string _source;
+        std::string _msg;
+    };
+
+    extern OSGEARTH_EXPORT const Status STATUS_OK;
+}
+
+#endif // OSGEARTH_STATUS_H

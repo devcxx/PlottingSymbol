@@ -1,0 +1,121 @@
+/* -*-c++-*- */
+/* osgEarth - Dynamic map generation toolkit for OpenSceneGraph
+* Copyright 2016 Pelican Mapping
+* http://osgearth.org
+*
+* osgEarth is free software; you can redistribute it and/or modify
+* it under the terms of the GNU Lesser General Public License as published by
+* the Free Software Foundation; either version 2 of the License, or
+* (at your option) any later version.
+*
+* THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+* IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+* FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+* AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+* LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+* FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS
+* IN THE SOFTWARE.
+*
+* You should have received a copy of the GNU Lesser General Public License
+* along with this program.  If not, see <http://www.gnu.org/licenses/>
+*/
+#ifndef OSGEARTH_DRIVERS_MP_TERRAIN_ENGINE_TILE_PAGED_LOD
+#define OSGEARTH_DRIVERS_MP_TERRAIN_ENGINE_TILE_PAGED_LOD 1
+
+#include "Common"
+#include "TileNodeRegistry"
+#include <osg/PagedLOD>
+#include <osgEarth/ThreadingUtils>
+#include <osgEarth/Progress>
+#include <osgEarth/ResourceReleaser>
+
+using namespace osgEarth;
+
+namespace osgEarth { namespace Drivers { namespace MPTerrainEngine
+{
+    /**
+     * TilePagedLOD is an extension to osg::PagedLOD that supports the tile
+     * registry and does LTP bbox culling on subtiles.
+     */
+    class TilePagedLOD : public osg::PagedLOD,
+                         public osgEarth::TerrainTileNode
+    {
+    public:
+        TilePagedLOD(
+            const UID&        engineUID,
+            TileNodeRegistry* liveTiles,
+            ResourceReleaser* releaser);
+
+        /**
+         * Sets a bounding box and localization matrix that will allow
+         * the PagedLOD to perform pre-emptive tight culling before loading 
+         * its child.
+         */
+        void setChildBoundingBoxAndMatrix(
+            int                     childNum,
+            const osg::BoundingBox& bbox,
+            const osg::Matrix&      world2local);
+
+        /** The tilenode in this group */
+        TileNode* getTileNode();
+        const TileNode* getTileNode() const;
+        void setTileNode(TileNode* tilenode);
+
+        osgDB::Options* getOrCreateDBOptions();
+
+        void setDebug(bool value) { _debug = value; }
+
+        void setRangeFactor(double f) { _rangeFactor = f; }
+
+    public: // osg::Group
+
+        /** called by the OSG DatabasePager when a paging result is ready. */
+        bool addChild( osg::Node* node );
+
+        void traverse(osg::NodeVisitor& nv);
+
+    public: // osg::PagedLOD
+
+        /** override to manage the tile node registries. */
+        bool removeExpiredChildren(double expiryTime, unsigned expiryFrame, osg::NodeList& removedChildren);
+
+    public:  // TerrainTileNode        
+        
+        virtual double getMinimumExpirationTime() const;
+        virtual void setMinimumExpirationTime(double minExpiryTime);
+        
+        virtual unsigned int getMinimumExpirationFrames() const;
+        virtual void setMinimumExpirationFrames(unsigned int minExpiryFrames);
+
+        virtual void loadChildren();
+
+        const TileKey& getKey() const;
+
+
+    protected:
+        virtual ~TilePagedLOD();
+
+    private:
+        osg::ref_ptr<TileNodeRegistry> _live;
+        osg::ref_ptr<ResourceReleaser> _releaser;
+        UID                            _engineUID;
+        Threading::Mutex               _updateMutex;
+        std::vector<osg::BoundingBox>  _childBBoxes;
+        std::vector<osg::Matrix>       _childBBoxMatrices;
+        optional<double>               _rangeFactor;
+
+        struct MyProgressCallback : public ProgressCallback
+        {
+            bool isCanceled(); // override
+            unsigned _frameOfLastCull;
+            TileNodeRegistry* _tiles;
+            void update(unsigned frame);
+        };
+        osg::ref_ptr<MyProgressCallback> _progress;
+        optional<osg::BoundingBox>       _bbox;
+        bool                             _debug;
+    };
+
+} } } // namespace osgEarth::Drivers::MPTerrainEngine
+
+#endif // OSGEARTH_DRIVERS_MP_TERRAIN_ENGINE_TILE_PAGED_LOD
